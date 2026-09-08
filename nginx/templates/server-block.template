@@ -1,0 +1,37 @@
+# One instance of this is rendered per DOMAIN_MAP entry by
+# scripts/generate-conf.sh — this file itself never changes when a domain
+# or app container is added.
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    # Certbot renewals hit this over plain HTTP — must NOT be redirected,
+    # or every renewal attempt fails the same way the initial bootstrap did.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name ${DOMAIN};
+
+    # All domains share the one multi-SAN cert issued for CERT_DOMAIN (the
+    # first entry in DOMAIN_MAP) — certbot names the cert after it.
+    ssl_certificate /etc/letsencrypt/live/${CERT_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${CERT_DOMAIN}/privkey.pem;
+
+    location / {
+        proxy_pass http://${UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

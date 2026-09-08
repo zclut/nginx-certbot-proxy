@@ -1,0 +1,41 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - certs:/etc/letsencrypt
+      - certs-data:/var/www/certbot
+    networks:
+      - proxy
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    profiles: ["tools"] # never started by `docker compose up`, only via `run --rm certbot ...`
+    volumes:
+      - certs:/etc/letsencrypt
+      - certs-data:/var/www/certbot
+    # No `command:` here on purpose — EMAIL and DOMAIN_MAP (see .env.example)
+    # live in scripts/*.sh, which build the actual `certonly ... -d a -d b -d
+    # c` / `renew` invocation and pass it as the `docker compose run --rm
+    # certbot <...>` override. Add a domain by adding a "domain=host:port"
+    # entry to DOMAIN_MAP in .env and re-running scripts/expand-cert.sh —
+    # this file never needs to change.
+    restart: "no"
+
+networks:
+  # This repo owns creating it — every app repo (league_of_canaimos,
+  # lol-ai-coach, ...) references it as `external: true` with the same name
+  # and joins its app container to it, so this nginx can reach them by name.
+  proxy:
+    driver: bridge
+    name: ${PROXY_NETWORK_NAME}
+
+volumes:
+  certs:
+  certs-data:
